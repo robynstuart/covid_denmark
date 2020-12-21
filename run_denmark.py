@@ -40,7 +40,7 @@ runoptions = ['quickfit', # Does a quick preliminary calibration. Quick to run, 
               'scens', # Takes the best-fitting runs and projects these forward under different mask and TTI assumptions
               'tti_sweeps', # Sweeps over future testing/tracing values to create data for heatmaps
               ]
-whattorun = runoptions[0] #Select which of the above to run
+whattorun = runoptions[1] #Select which of the above to run
 
 # Filepaths
 data_path = 'dk_data.csv'
