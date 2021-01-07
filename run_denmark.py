@@ -112,7 +112,7 @@ def make_sim(seed, beta, calibration=True, scenario=None, delta_beta=0.6, future
 
     # 4. Change death and critical probabilities
     interventions += [cv.dynamic_pars({'n_imports': {'days': [sim.day('2020-06-01'), sim.day('2020-12-09')], 'vals': [2, 0]},
-                                       'rel_death_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]},
+                                       'rel_death_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.85]},
                                        'rel_crit_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]},
                                        'rel_severe_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]}})
                       ]
@@ -187,7 +187,7 @@ if __name__ == '__main__':
         sims = []
         fitsummary = sc.loadobj(f'{resfolder}/fitsummary.obj')
         for bn, beta in enumerate(betas):
-            goodseeds = [i for i in range(n_runs) if fitsummary[bn][i] < 300]
+            goodseeds = [i for i in range(n_runs) if fitsummary[bn][i] < 295]
             sc.blank()
             print('---------------\n')
             print(f'Beta: {beta}, goodseeds: {len(goodseeds)}')
