@@ -49,14 +49,14 @@ resfolder = 'results'
 # Important dates
 start_day = '2020-02-01'
 end_day = '2021-03-31'
-data_end = '2020-12-09' # Final date for calibration
+data_end = '2021-01-04' # Final date for calibration
 
 
 ########################################################################
 # Create the baseline simulation
 ########################################################################
 
-def make_sim(seed, beta, calibration=True, scenario=None, future_symp_test=None, future_t_eff=None, end_day=None, verbose=0):
+def make_sim(seed, beta, calibration=True, scenario=None, delta_beta=0.6, future_symp_test=None, future_t_eff=None, end_day=None, verbose=0):
 
     # Set the parameters
     total_pop    = 5.8e6 # Danish population size
@@ -87,13 +87,13 @@ def make_sim(seed, beta, calibration=True, scenario=None, future_symp_test=None,
 
     # 1. Lockdowns and NPIs
     interventions = [
-        cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09'], changes=[0.05, 0.8, 0.1, 1.0, 0.3], layers=['s']), # School closure and reopening
-        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.5, 0.6, 0.5], layers=['s']), # Assume precautions in place after school returns
+        cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19'], changes=[0.05, 0.8, 0.1, 1.0, 0.5, 0.0], layers=['s']), # School closure and reopening
+        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.5, 0.65, 0.6], layers=['s']), # Assume precautions in place after school returns
 
-        cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09'], changes=[0.1, 0.6, 0.5, 0.8, 0.2], layers=['w']),
-        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.5, 0.6, 0.6], layers=['w']),  # Assume precautions in place for workers
+        cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19'], changes=[0.1, 0.6, 0.5, 0.8, 0.5, 0.1], layers=['w']),
+        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.5, 0.65, 0.6], layers=['w']),  # Assume precautions in place for workers
 
-        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29', '2020-12-09'], [0.4, 0.6, 0.5, 0.4], layers=['c']), # Precautions in community lapsed after low case counts
+        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29', '2020-12-09', '2020-12-19'], [0.4, 0.7, 0.65, 0.6, 0.2], layers=['c']), # Precautions in community lapsed after low case counts
     ]
 
     # 2. Testing assumptions
@@ -102,20 +102,29 @@ def make_sim(seed, beta, calibration=True, scenario=None, future_symp_test=None,
 #                    symp_test=50.0, quar_test=50.),
         cv.test_prob(symp_prob=0.025, asymp_quar_prob=0.1, start_day=0, end_day='2020-04-30', test_delay=2),
         cv.test_prob(symp_prob=0.05, asymp_quar_prob=0.25, start_day='2020-05-01', end_day='2020-08-31', test_delay=1),
-        cv.test_prob(symp_prob=0.10, asymp_quar_prob=0.35, start_day='2020-09-01', test_delay=1),
-        cv.test_prob(symp_prob=0.15, asymp_quar_prob=0.40, start_day='2020-12-01', test_delay=1),]
+        cv.test_prob(symp_prob=0.10, asymp_quar_prob=0.35, start_day='2020-09-01', test_delay=1)]
 
     # 3. Assume some amount of contact tracing
     interventions += [cv.contact_tracing(start_day='2020-03-01',
-                                         trace_probs={'h': 1, 's': 0.8, 'w': 0.8, 'c': 0.1},
+                                         trace_probs={'h': 1, 's': 0.8, 'w': 0.5, 'c': 0.1},
                                          trace_time={'h': 0, 's': 1, 'w': 2, 'c': 7},
                                          quar_period=7)]
 
     # 4. Change death and critical probabilities
-    interventions += [cv.dynamic_pars({'n_imports': {'days': [sim.day('2020-06-01'), sim.day('2020-12-09')], 'vals': [3, 0]},
+    interventions += [cv.dynamic_pars({'n_imports': {'days': [sim.day('2020-06-01'), sim.day('2020-12-09')], 'vals': [2, 0]},
                                        'rel_death_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]},
                                        'rel_crit_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]},
-                                       'rel_severe_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]}})]
+                                       'rel_severe_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]}})
+                      ]
+
+    # 5. Add the new variant
+    # Add a new change in beta to represent the takeover of the novel variant VOC 202012/01
+    # Assume that the new variant is 60% more transmisible (https://cmmid.github.io/topics/covid19/uk-novel-variant.html,
+    # Assume that between Nov 1 and Jan 30, the new variant grows from 0-100% of cases
+    voc_days   = np.linspace(sim.day('2020-12-01'), sim.day('2020-12-01')+60, 31)
+    voc_prop   = 1./(1+np.exp(-0.15*(voc_days-(sim.day('2020-12-01')+30)))) # Use a logistic growth function to approximate fig 2A of https://cmmid.github.io/topics/covid19/uk-novel-variant.html
+    voc_change = voc_prop*(1+delta_beta) + (1-voc_prop)*1.
+    interventions += [cv.change_beta(days=voc_days, changes=voc_change)]
 
     # Finally, update the parameters
     sim.update_pars(interventions=interventions)
@@ -178,7 +187,7 @@ if __name__ == '__main__':
         sims = []
         fitsummary = sc.loadobj(f'{resfolder}/fitsummary.obj')
         for bn, beta in enumerate(betas):
-            goodseeds = [i for i in range(n_runs) if fitsummary[bn][i] < 163]
+            goodseeds = [i for i in range(n_runs) if fitsummary[bn][i] < 300]
             sc.blank()
             print('---------------\n')
             print(f'Beta: {beta}, goodseeds: {len(goodseeds)}')
@@ -192,15 +201,15 @@ if __name__ == '__main__':
                     sim.label = f"Sim {seed}"
                     sims.append(sim)
 
-#        msim = cv.MultiSim(sims)
-#        msim.run()
+        msim = cv.MultiSim(sims)
+        msim.run()
 
-#        if save_sim:
-#            msim.save(f'{resfolder}/denmark_sim.obj')
-#        if do_plot:
-#            msim.reduce()
-#            msim.plot(to_plot=to_plot, do_save=do_save, do_show=False, fig_path=f'denmark.png',
-#                      legend_args={'loc': 'upper left'}, axis_args={'hspace': 0.4}, interval=50, n_cols=2)
+        if save_sim:
+            msim.save(f'{resfolder}/denmark_sim.obj')
+        if do_plot:
+            msim.reduce()
+            msim.plot(to_plot=to_plot, do_save=do_save, do_show=False, fig_path=f'denmark.png',
+                      legend_args={'loc': 'upper left'}, axis_args={'hspace': 0.4}, interval=50, n_cols=2)
 
 
     # Run scenarios with best-fitting seeds and parameters
