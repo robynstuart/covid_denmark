@@ -100,13 +100,13 @@ def make_sim(seed, p, end_day=None, verbose=0):
     # 1. Lockdowns and NPIs
     interventions = [
         cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19'], changes=[0.05, 0.8, 0.1, 1.0, 0.5, 0.0], layers=['s']), # School closure and reopening
-        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.6, 0.8, 0.7], layers=['s']), # Assume precautions in place after school returns
+        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.6, 0.8, 0.67], layers=['s']), # Assume precautions in place after school returns
 
         cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19'], changes=[0.1, 0.3, 0.5, 0.8, 0.5, 0.1], layers=['w']),
-        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.6, 0.8, 0.7], layers=['w']),  # Assume precautions in place for workers
+        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.6, 0.8, 0.67], layers=['w']),  # Assume precautions in place for workers
 
         cv.change_beta(['2020-03-13', '2020-04-15', '2020-12-09', '2020-12-19', '2021-01-03'], [1.2, 1.0, 1.2, 1.5, 1.2], layers=['h']),  # Assume precautions in place for workers
-        cv.change_beta(['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-10-29', '2020-12-09', '2020-12-19'], [0.3, 0.5, 0.6, 0.7, 0.65, 0.55, 0.5], layers=['c']), # Precautions in community lapsed after low case counts
+        cv.change_beta(['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-10-29', '2020-12-09', '2020-12-19'], [0.3, 0.5, 0.65, 0.8, 0.67, 0.6, 0.5], layers=['c']), # Precautions in community lapsed after low case counts
     ]
 
     # 2. Testing assumptions
@@ -157,16 +157,16 @@ if __name__ == '__main__':
     p = sc.objdict(
         beta = 0.015,
         delta_beta = 0.6,
-        rd = 0.5,
+        rd = 0.45,
         tn = 50.)
 
     betas = [i / 10000 for i in range(146, 156, 2)]
-    rds = [i / 100 for i in range(46, 56, 2)]
+    rds = [i / 100 for i in range(41, 51, 2)]
     tns = [30, 40, 50, 60, 70]
 
     # Quick calibration
     if whattorun=='quickfit':
-        s0 = make_sim(seed=1, p=p, end_day=data_end, verbose=0.1)
+        s0 = make_sim(seed=1, p=p, end_day='2021-01-08', verbose=0.1)
         sims = []
         for seed in range(6):
             sim = s0.copy()
@@ -215,7 +215,7 @@ if __name__ == '__main__':
         for bn, beta in enumerate(betas):
             for rn, rd in enumerate(rds):
                 for tnn, tn in enumerate(tns):
-                    goodseeds = [i for i in range(n_runs) if fitsummary[beta][rd][tnn][i] < 400]
+                    goodseeds = [i for i in range(n_runs) if fitsummary[beta][rd][tnn][i] < 220]
                     sc.blank()
                     print('---------------\n')
                     print(f'Beta: {beta}, RD: {rd}, symp_test: {tn}, goodseeds: {len(goodseeds)}')
@@ -230,15 +230,15 @@ if __name__ == '__main__':
                             sim.label = f"Sim {seed}"
                             sims.append(sim)
 
-#        msim = cv.MultiSim(sims)
-#        msim.run()
+        msim = cv.MultiSim(sims)
+        msim.run()
 
-#        if save_sim:
-#            msim.save(f'{resfolder}/denmark_sim.obj')
-#        if do_plot:
-#            msim.reduce()
-#            msim.plot(to_plot=to_plot, do_save=do_save, do_show=False, fig_path=f'denmark.png',
-#                      legend_args={'loc': 'upper left'}, axis_args={'hspace': 0.4}, interval=50, n_cols=2)
+        if save_sim:
+            msim.save(f'{resfolder}/denmark_sim.obj')
+        if do_plot:
+            msim.reduce()
+            msim.plot(to_plot=to_plot, do_save=do_save, do_show=False, fig_path=f'denmark.png',
+                      legend_args={'loc': 'upper left'}, axis_args={'hspace': 0.4}, interval=50, n_cols=2)
 
 
     # Run scenarios with best-fitting seeds and parameters
