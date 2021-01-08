@@ -183,9 +183,11 @@ if __name__ == '__main__':
 
     # Full parameter/seed search
     elif whattorun=='fullfit':
-        fitsummary = []
+        fitsummary = {}
         for beta in betas:
+            fitsummary[beta] = {}
             for rd in rds:
+                fitsummary[beta][rd] = []
                 for tn in tns:
                     p = sc.objdict(
                         beta=0.015,
@@ -205,9 +207,9 @@ if __name__ == '__main__':
                         sim.set_seed()
                         sim.label = f"Sim {seed}"
                         sims.append(sim)
-            msim = cv.MultiSim(sims)
-            msim.run()
-            fitsummary.append([sim.compute_fit().mismatch for sim in msim.sims])
+                    msim = cv.MultiSim(sims)
+                    msim.run()
+                    fitsummary[beta][rd].append([sim.compute_fit().mismatch for sim in msim.sims])
 
         sc.saveobj(f'{resfolder}/fitsummary.obj',fitsummary)
 
@@ -216,19 +218,22 @@ if __name__ == '__main__':
         sims = []
         fitsummary = sc.loadobj(f'{resfolder}/fitsummary.obj')
         for bn, beta in enumerate(betas):
-            goodseeds = [i for i in range(n_runs) if fitsummary[bn][i] < 260]
-            sc.blank()
-            print('---------------\n')
-            print(f'Beta: {beta}, goodseeds: {len(goodseeds)}')
-            print('---------------\n')
-            if len(goodseeds) > 0:
-                s0 = make_sim(seed=1, beta=beta, end_day=data_end)
-                for seed in goodseeds:
-                    sim = s0.copy()
-                    sim['rand_seed'] = seed
-                    sim.set_seed()
-                    sim.label = f"Sim {seed}"
-                    sims.append(sim)
+            for rn, rd in enumerate(rds):
+                for tnn, tn in enumerate(tns):
+                    goodseeds = [i for i in range(n_runs) if fitsummary[beta][rd][tnn][i] < 260]
+                    sc.blank()
+                    print('---------------\n')
+                    print(f'Beta: {beta}, RD: {rd}, symp_test: {tn}, goodseeds: {len(goodseeds)}')
+                    print('---------------\n')
+                    if len(goodseeds) > 0:
+                        p = sc.objdict(beta=beta,delta_beta=0.6,rd=rd,tn=tn)
+                        s0 = make_sim(seed=1, beta=beta, end_day=data_end)
+                        for seed in goodseeds:
+                            sim = s0.copy()
+                            sim['rand_seed'] = seed
+                            sim.set_seed()
+                            sim.label = f"Sim {seed}"
+                            sims.append(sim)
 
         msim = cv.MultiSim(sims)
         msim.run()
