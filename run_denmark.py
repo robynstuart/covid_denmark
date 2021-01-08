@@ -22,7 +22,7 @@ save_sim = 0
 do_show = 0
 verbose = 1
 seed    = 1
-n_runs = 200
+n_runs = 10
 to_plot = sc.objdict({
     'Cumulative diagnoses': ['cum_diagnoses'],
     'Cumulative infections': ['cum_infections'],
@@ -56,7 +56,17 @@ data_end = '2021-01-04' # Final date for calibration
 # Create the baseline simulation
 ########################################################################
 
-def make_sim(seed, beta, calibration=True, scenario=None, delta_beta=0.6, future_symp_test=None, future_t_eff=None, end_day=None, verbose=0):
+def test_num_subtarg(sim, sev=100.0, u20=0.5):
+    ''' Subtarget severe people with more testing, and young people with less '''
+    sev_inds = sim.people.true('severe')
+    u20_inds = sc.findinds(sim.people.age<20 * ~sim.people.severe) # People who are under 20 and severe test as if they're severe; * is element-wise "and"
+    u20_vals = u20*np.ones(len(u20_inds))
+    sev_vals = sev*np.ones(len(sev_inds))
+    inds = np.concatenate([u20_inds, sev_inds])
+    vals = np.concatenate([u20_vals, sev_vals])
+    return {'inds':inds, 'vals':vals}
+
+def make_sim(seed, p, end_day=None, verbose=0):
 
     # Set the parameters
     total_pop    = 5.8e6 # Danish population size
@@ -64,7 +74,6 @@ def make_sim(seed, beta, calibration=True, scenario=None, delta_beta=0.6, future
     pop_scale    = int(total_pop/pop_size)
     pop_type     = 'hybrid'
     pop_infected = 120
-    beta         = beta
     if end_day is None: end_day = '2021-03-31'
 
     pars = sc.objdict(
@@ -74,7 +83,7 @@ def make_sim(seed, beta, calibration=True, scenario=None, delta_beta=0.6, future
         pop_type     = pop_type,
         start_day    = start_day,
         end_day      = end_day,
-        beta         = beta,
+        beta         = p.beta,
         rescale      = True,
         rand_seed    = seed,
         verbose      = verbose,
@@ -84,25 +93,29 @@ def make_sim(seed, beta, calibration=True, scenario=None, delta_beta=0.6, future
     )
 
     sim = cv.Sim(pars=pars, datafile=data_path, location='denmark')
+    sim['prognoses']['symp_probs'] = np.array([0.2, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.9])
+    sim['prognoses']['sus_ORs'][0] = 1.0 # ages 0-10
+    sim['prognoses']['sus_ORs'][1] = 1.0 # ages 10-20
 
     # 1. Lockdowns and NPIs
     interventions = [
         cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19'], changes=[0.05, 0.8, 0.1, 1.0, 0.5, 0.0], layers=['s']), # School closure and reopening
-        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.5, 0.65, 0.6], layers=['s']), # Assume precautions in place after school returns
+        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.6, 0.8, 0.7], layers=['s']), # Assume precautions in place after school returns
 
-        cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19'], changes=[0.1, 0.6, 0.5, 0.8, 0.5, 0.1], layers=['w']),
-        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.5, 0.65, 0.6], layers=['w']),  # Assume precautions in place for workers
+        cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19'], changes=[0.1, 0.3, 0.5, 0.8, 0.5, 0.1], layers=['w']),
+        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.6, 0.8, 0.7], layers=['w']),  # Assume precautions in place for workers
 
-        cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29', '2020-12-09', '2020-12-19'], [0.4, 0.7, 0.65, 0.6, 0.2], layers=['c']), # Precautions in community lapsed after low case counts
+        cv.change_beta(['2020-03-13', '2020-04-15', '2020-12-09', '2020-12-19', '2021-01-03'], [1.2, 1.0, 1.2, 1.5, 1.2], layers=['h']),  # Assume precautions in place for workers
+        cv.change_beta(['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-10-29', '2020-12-09', '2020-12-19'], [0.3, 0.5, 0.6, 0.7, 0.65, 0.55, 0.5], layers=['c']), # Precautions in community lapsed after low case counts
     ]
 
     # 2. Testing assumptions
     interventions += [
-#        cv.test_num(daily_tests=sim.data['new_tests'], start_day=0, end_day=sim.day(data_end), test_delay=1,
-#                    symp_test=50.0, quar_test=50.),
-        cv.test_prob(symp_prob=0.025, asymp_quar_prob=0.1, start_day=0, end_day='2020-04-30', test_delay=2),
-        cv.test_prob(symp_prob=0.05, asymp_quar_prob=0.25, start_day='2020-05-01', end_day='2020-08-31', test_delay=1),
-        cv.test_prob(symp_prob=0.10, asymp_quar_prob=0.35, start_day='2020-09-01', test_delay=1)]
+        cv.test_num(daily_tests=sim.data['new_tests'], start_day=0, end_day=sim.day(data_end), test_delay=1,
+                    symp_test=p.tn, sensitivity=0.97, subtarget=test_num_subtarg)]
+#        cv.test_prob(symp_prob=0.025, asymp_quar_prob=0.1, start_day=0, end_day='2020-04-30', test_delay=2),
+#        cv.test_prob(symp_prob=0.05, asymp_quar_prob=0.25, start_day='2020-05-01', end_day='2020-08-31', test_delay=1),
+#        cv.test_prob(symp_prob=0.10, asymp_quar_prob=0.35, start_day='2020-09-01', test_delay=1)]
 
     # 3. Assume some amount of contact tracing
     interventions += [cv.contact_tracing(start_day='2020-03-01',
@@ -111,11 +124,11 @@ def make_sim(seed, beta, calibration=True, scenario=None, delta_beta=0.6, future
                                          quar_period=7)]
 
     # 4. Change death and critical probabilities
-    interventions += [cv.dynamic_pars({'n_imports': {'days': [sim.day('2020-06-01'), sim.day('2020-12-09')], 'vals': [2, 0]},
-                                       'rel_death_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.85]},
-                                       'rel_crit_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]},
-                                       'rel_severe_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]}})
-                      ]
+    interventions += [cv.dynamic_pars({'rel_death_prob': {'days': [sim.day('2020-06-01')], 'vals': [p.rd]},
+#                                       'rel_crit_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]},
+#                                       'rel_severe_prob': {'days': [sim.day('2020-06-01')], 'vals': [0.5]}
+#                                      'n_imports': {'days': [sim.day('2020-06-01'), sim.day('2020-12-09')], 'vals': [2, 0]},
+                                        })]
 
     # 5. Add the new variant
     # Add a new change in beta to represent the takeover of the novel variant VOC 202012/01
@@ -123,7 +136,7 @@ def make_sim(seed, beta, calibration=True, scenario=None, delta_beta=0.6, future
     # Assume that between Nov 1 and Jan 30, the new variant grows from 0-100% of cases
     voc_days   = np.linspace(sim.day('2020-12-01'), sim.day('2020-12-01')+60, 31)
     voc_prop   = 1./(1+np.exp(-0.15*(voc_days-(sim.day('2020-12-01')+30)))) # Use a logistic growth function to approximate fig 2A of https://cmmid.github.io/topics/covid19/uk-novel-variant.html
-    voc_change = voc_prop*(1+delta_beta) + (1-voc_prop)*1.
+    voc_change = voc_prop*(1+p.delta_beta) + (1-voc_prop)*1.
     interventions += [cv.change_beta(days=voc_days, changes=voc_change)]
 
     # Finally, update the parameters
@@ -141,11 +154,19 @@ def make_sim(seed, beta, calibration=True, scenario=None, delta_beta=0.6, future
 ########################################################################
 if __name__ == '__main__':
 
-    betas = [i / 10000 for i in range(158, 163, 1)]
+    p = sc.objdict(
+        beta = 0.015,
+        delta_beta = 0.6,
+        rd = 0.5,
+        tn = 50.)
+
+    betas = [i / 10000 for i in range(146, 156, 2)]
+    rds = [i / 100 for i in range(46, 56, 2)]
+    tns = [30, 40, 50, 60, 70]
 
     # Quick calibration
     if whattorun=='quickfit':
-        s0 = make_sim(seed=1, beta=0.016, end_day=data_end, verbose=0.1)
+        s0 = make_sim(seed=1, p=p, end_day=data_end, verbose=0.1)
         sims = []
         for seed in range(6):
             sim = s0.copy()
@@ -164,18 +185,26 @@ if __name__ == '__main__':
     elif whattorun=='fullfit':
         fitsummary = []
         for beta in betas:
-            sc.blank()
-            print('---------------\n')
-            print(f'Beta: {beta}... ')
-            print('---------------\n')
-            s0 = make_sim(seed=1, beta=beta, end_day=data_end)
-            sims = []
-            for seed in range(n_runs):
-                sim = s0.copy()
-                sim['rand_seed'] = seed
-                sim.set_seed()
-                sim.label = f"Sim {seed}"
-                sims.append(sim)
+            for rd in rds:
+                for tn in tns:
+                    p = sc.objdict(
+                        beta=0.015,
+                        delta_beta=0.6,
+                        rd=0.5,
+                        tn=50.)
+
+                    sc.blank()
+                    print('---------------\n')
+                    print(f'Beta: {beta}, RD: {rd}, symp_test: {tn}... ')
+                    print('---------------\n')
+                    s0 = make_sim(seed=1, p=p, end_day=data_end)
+                    sims = []
+                    for seed in range(n_runs):
+                        sim = s0.copy()
+                        sim['rand_seed'] = seed
+                        sim.set_seed()
+                        sim.label = f"Sim {seed}"
+                        sims.append(sim)
             msim = cv.MultiSim(sims)
             msim.run()
             fitsummary.append([sim.compute_fit().mismatch for sim in msim.sims])
@@ -187,7 +216,7 @@ if __name__ == '__main__':
         sims = []
         fitsummary = sc.loadobj(f'{resfolder}/fitsummary.obj')
         for bn, beta in enumerate(betas):
-            goodseeds = [i for i in range(n_runs) if fitsummary[bn][i] < 295]
+            goodseeds = [i for i in range(n_runs) if fitsummary[bn][i] < 260]
             sc.blank()
             print('---------------\n')
             print(f'Beta: {beta}, goodseeds: {len(goodseeds)}')
