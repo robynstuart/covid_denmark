@@ -189,12 +189,7 @@ if __name__ == '__main__':
             for rd in rds:
                 fitsummary[beta][rd] = []
                 for tn in tns:
-                    p = sc.objdict(
-                        beta=0.015,
-                        delta_beta=0.6,
-                        rd=0.5,
-                        tn=50.)
-
+                    p = sc.objdict(beta=beta,delta_beta=0.6,rd=rd,tn=tn)
                     sc.blank()
                     print('---------------\n')
                     print(f'Beta: {beta}, RD: {rd}, symp_test: {tn}... ')
@@ -220,14 +215,14 @@ if __name__ == '__main__':
         for bn, beta in enumerate(betas):
             for rn, rd in enumerate(rds):
                 for tnn, tn in enumerate(tns):
-                    goodseeds = [i for i in range(n_runs) if fitsummary[beta][rd][tnn][i] < 260]
+                    goodseeds = [i for i in range(n_runs) if fitsummary[beta][rd][tnn][i] < 400]
                     sc.blank()
                     print('---------------\n')
                     print(f'Beta: {beta}, RD: {rd}, symp_test: {tn}, goodseeds: {len(goodseeds)}')
                     print('---------------\n')
                     if len(goodseeds) > 0:
                         p = sc.objdict(beta=beta,delta_beta=0.6,rd=rd,tn=tn)
-                        s0 = make_sim(seed=1, beta=beta, end_day=data_end)
+                        s0 = make_sim(seed=1, p=p, end_day=data_end)
                         for seed in goodseeds:
                             sim = s0.copy()
                             sim['rand_seed'] = seed
@@ -235,15 +230,15 @@ if __name__ == '__main__':
                             sim.label = f"Sim {seed}"
                             sims.append(sim)
 
-        msim = cv.MultiSim(sims)
-        msim.run()
+#        msim = cv.MultiSim(sims)
+#        msim.run()
 
-        if save_sim:
-            msim.save(f'{resfolder}/denmark_sim.obj')
-        if do_plot:
-            msim.reduce()
-            msim.plot(to_plot=to_plot, do_save=do_save, do_show=False, fig_path=f'denmark.png',
-                      legend_args={'loc': 'upper left'}, axis_args={'hspace': 0.4}, interval=50, n_cols=2)
+#        if save_sim:
+#            msim.save(f'{resfolder}/denmark_sim.obj')
+#        if do_plot:
+#            msim.reduce()
+#            msim.plot(to_plot=to_plot, do_save=do_save, do_show=False, fig_path=f'denmark.png',
+#                      legend_args={'loc': 'upper left'}, axis_args={'hspace': 0.4}, interval=50, n_cols=2)
 
 
     # Run scenarios with best-fitting seeds and parameters
