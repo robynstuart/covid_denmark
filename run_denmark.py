@@ -40,7 +40,7 @@ runoptions = ['quickfit', # Does a quick preliminary calibration. Quick to run, 
               'scens', # Takes the best-fitting runs and projects these forward under different mask and TTI assumptions
               'tti_sweeps', # Sweeps over future testing/tracing values to create data for heatmaps
               ]
-whattorun = runoptions[1] #Select which of the above to run
+whattorun = runoptions[3] #Select which of the above to run
 
 # Filepaths
 data_path = 'dk_data.csv'
@@ -66,7 +66,7 @@ def test_num_subtarg(sim, sev=100.0, u20=0.5):
     vals = np.concatenate([u20_vals, sev_vals])
     return {'inds':inds, 'vals':vals}
 
-def make_sim(seed, p, end_day=None, verbose=0):
+def make_sim(seed, p, calibration=True, scenname=None, end_day=None, verbose=0):
 
     # Set the parameters
     total_pop    = 5.8e6 # Danish population size
@@ -99,15 +99,32 @@ def make_sim(seed, p, end_day=None, verbose=0):
 
     # 1. Lockdowns and NPIs
     interventions = [
-        cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19'], changes=[0.05, 0.8, 0.1, 1.0, 0.5, 0.0], layers=['s']), # School closure and reopening
+        cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19','2021-01-04'], changes=[0.05, 0.8, 0.1, 1.0, 0.5, 0.0, 0.5], layers=['s']), # School closure and reopening
         cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.6, 0.8, 0.67], layers=['s']), # Assume precautions in place after school returns
 
         cv.clip_edges(days=['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-12-09', '2020-12-19'], changes=[0.1, 0.3, 0.5, 0.8, 0.5, 0.1], layers=['w']),
         cv.change_beta(['2020-03-13', '2020-09-01', '2020-10-29'], [0.6, 0.8, 0.67], layers=['w']),  # Assume precautions in place for workers
 
-        cv.change_beta(['2020-03-13', '2020-04-15', '2020-12-09', '2020-12-19', '2021-01-03'], [1.2, 1.0, 1.2, 1.5, 1.2], layers=['h']),  # Assume precautions in place for workers
-        cv.change_beta(['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-10-29', '2020-12-09', '2020-12-19'], [0.3, 0.5, 0.65, 0.8, 0.67, 0.6, 0.5], layers=['c']), # Precautions in community lapsed after low case counts
+        cv.change_beta(['2020-03-13', '2020-04-15', '2020-12-09', '2020-12-19', '2021-01-03'], [1.2, 1.0, 1.2, 1.5, 1.2], layers=['h']),
+        cv.change_beta(['2020-03-13', '2020-04-15', '2020-06-15', '2020-09-01', '2020-10-29', '2020-12-09', '2020-12-19'], [0.3, 0.5, 0.65, 0.8, 0.67, 0.6, 0.5], layers=['c']),
     ]
+
+    if not calibration:
+        if scenname == 'lift17':
+            interventions += [
+                cv.clip_edges( days=['2021-01-18'], changes=[1.0], layers=['s']),
+                cv.clip_edges( days=['2021-01-18'], changes=[0.8], layers=['w']),
+                cv.change_beta(days=['2021-01-18'], changes=[0.67], layers=['c'])]
+        elif scenname == 'lift31':
+            interventions += [
+                cv.clip_edges( days=['2021-02-01'], changes=[1.0], layers=['s']),
+                cv.clip_edges( days=['2021-02-01'], changes=[0.8], layers=['w']),
+                cv.change_beta(days=['2021-02-01'], changes=[0.67], layers=['c'])]
+        elif scenname == 'schools17rest30':
+            interventions += [
+                cv.clip_edges( days=['2021-01-18'], changes=[1.0], layers=['s']),
+                cv.clip_edges( days=['2021-02-01'], changes=[0.8], layers=['w']),
+                cv.change_beta(days=['2021-02-01'], changes=[0.67], layers=['c'])]
 
     # 2. Testing assumptions
     interventions += [
@@ -212,14 +229,16 @@ if __name__ == '__main__':
     elif whattorun=='finialisefit':
         sims = []
         fitsummary = sc.loadobj(f'{resfolder}/fitsummary.obj')
+        good = 0
         for bn, beta in enumerate(betas):
             for rn, rd in enumerate(rds):
                 for tnn, tn in enumerate(tns):
-                    goodseeds = [i for i in range(n_runs) if fitsummary[beta][rd][tnn][i] < 220]
+                    goodseeds = [i for i in range(n_runs) if fitsummary[beta][rd][tnn][i] < 284] #200:11,
                     sc.blank()
                     print('---------------\n')
                     print(f'Beta: {beta}, RD: {rd}, symp_test: {tn}, goodseeds: {len(goodseeds)}')
                     print('---------------\n')
+                    good += len(goodseeds)
                     if len(goodseeds) > 0:
                         p = sc.objdict(beta=beta,delta_beta=0.6,rd=rd,tn=tn)
                         s0 = make_sim(seed=1, p=p, end_day=data_end)
@@ -245,51 +264,38 @@ if __name__ == '__main__':
     elif whattorun=='scens':
 
         # Define scenario to run
-        scenarios = sc.odict({'masks15': 0.15,
-                              'masks30': 0.07,
-                              'masks15_notschools': 0.17,
-                              'masks30_notschools': 0.095})
+        scenarios = ['lift17', 'lift30', 'schools17rest30']
 
-        for scenname, future_symp_test in scenarios.iteritems():
+        for scenname in scenarios:
 
             print('---------------\n')
             print(f'Beginning scenario: {scenname}')
             print('---------------\n')
             sc.blank()
-            sims_cur, sims_opt = [], []
+            sims_cur = []
             fitsummary = sc.loadobj(f'{resfolder}/fitsummary.obj')
 
             for bn, beta in enumerate(betas):
-                goodseeds = [i for i in range(n_runs) if fitsummary[bn][i] < 163]
-                if len(goodseeds) > 0:
-                    s_cur = make_sim(1, beta, calibration=False, scenario=scenname, future_symp_test=None, end_day='2021-12-31')
-                    s_opt = make_sim(1, beta, calibration=False, scenario=scenname, future_symp_test=future_symp_test, end_day='2021-12-31')
-                    for seed in goodseeds:
-                        sim_cur = s_cur.copy()
-                        sim_cur['rand_seed'] = seed
-                        sim_cur.set_seed()
-                        sim_cur.label = f"Sim {seed}"
-                        sims_cur.append(sim_cur)
-                        sim_opt = s_opt.copy()
-                        sim_opt['rand_seed'] = seed
-                        sim_opt.set_seed()
-                        sim_opt.label = f"Sim {seed}"
-                        sims_opt.append(sim_opt)
+                for rn, rd in enumerate(rds):
+                    for tnn, tn in enumerate(tns):
+                        goodseeds = [i for i in range(n_runs) if fitsummary[beta][rd][tnn][i] < 284]  # 200:11,
+                        if len(goodseeds) > 0:
+                            s_cur = make_sim(1, beta, calibration=False, scenario=scenname, future_symp_test=None, end_day='2021-03-01')
+                            for seed in goodseeds:
+                                sim_cur = s_cur.copy()
+                                sim_cur['rand_seed'] = seed
+                                sim_cur.set_seed()
+                                sim_cur.label = f"Sim {seed}"
+                                sims_cur.append(sim_cur)
 
             msim_cur = cv.MultiSim(sims_cur)
             msim_cur.run()
-            msim_opt = cv.MultiSim(sims_opt)
-            msim_opt.run()
 
             if save_sim:
-                msim_cur.save(f'{resfolder}/denmark_sim_{scenname}_current.obj')
-                msim_opt.save(f'{resfolder}/denmark_sim_{scenname}_optimal.obj')
+                msim_cur.save(f'{resfolder}/denmark_scen_{scenname}.obj')
             if do_plot:
                 msim_cur.reduce()
                 msim_cur.plot(to_plot=to_plot, do_save=do_save, do_show=False, fig_path=f'denmark_{scenname}_current.png',
-                          legend_args={'loc': 'upper left'}, axis_args={'hspace': 0.4}, interval=50, n_cols=2)
-                msim_cur.reduce()
-                msim_cur.plot(to_plot=to_plot, do_save=do_save, do_show=False, fig_path=f'denmark_{scenname}_optimal.png',
                           legend_args={'loc': 'upper left'}, axis_args={'hspace': 0.4}, interval=50, n_cols=2)
 
             print(f'... completed scenario: {scenname}')
