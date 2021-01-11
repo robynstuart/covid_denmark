@@ -280,7 +280,8 @@ if __name__ == '__main__':
                     for tnn, tn in enumerate(tns):
                         goodseeds = [i for i in range(n_runs) if fitsummary[beta][rd][tnn][i] < 284]  # 200:11,
                         if len(goodseeds) > 0:
-                            s_cur = make_sim(1, beta, calibration=False, scenario=scenname, future_symp_test=None, end_day='2021-03-01')
+                            p = sc.objdict(beta=beta, delta_beta=0.6, rd=rd, tn=tn)
+                            s_cur = make_sim(1, p, calibration=False, scenario=scenname, end_day='2021-03-01')
                             for seed in goodseeds:
                                 sim_cur = s_cur.copy()
                                 sim_cur['rand_seed'] = seed
