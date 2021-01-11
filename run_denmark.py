@@ -66,7 +66,7 @@ def test_num_subtarg(sim, sev=100.0, u20=0.5):
     vals = np.concatenate([u20_vals, sev_vals])
     return {'inds':inds, 'vals':vals}
 
-def make_sim(seed, p, calibration=True, scenname=None, end_day=None, verbose=0):
+def make_sim(seed, p, calibration=True, scenario=None, end_day=None, verbose=0):
 
     # Set the parameters
     total_pop    = 5.8e6 # Danish population size
